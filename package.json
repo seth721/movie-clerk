@@ -9,18 +9,22 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "next": "16.1.7",
+    "@anthropic-ai/sdk": "^0.79.0",
+    "better-sqlite3": "^12.8.0",
+    "next": "^15.5.13",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "styled-jsx": "^5.1.7"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
+    "@tailwindcss/postcss": "^4.2.2",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.7",
-    "tailwindcss": "^4",
+    "tailwindcss": "^4.2.2",
     "typescript": "^5"
   }
 }

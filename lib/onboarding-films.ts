@@ -1,0 +1,28 @@
+// Curated list of 24 well-known films chosen to maximise taste signal diversity.
+// Spread across genre, decade, language, and mainstream/arthouse spectrum.
+export const ONBOARDING_FILMS = [
+  { tmdb_id: 238,    title: "The Godfather",                      year: 1972 },
+  { tmdb_id: 680,    title: "Pulp Fiction",                       year: 1994 },
+  { tmdb_id: 155,    title: "The Dark Knight",                    year: 2008 },
+  { tmdb_id: 597,    title: "Titanic",                            year: 1997 },
+  { tmdb_id: 496243, title: "Parasite",                           year: 2019 },
+  { tmdb_id: 278,    title: "The Shawshank Redemption",           year: 1994 },
+  { tmdb_id: 13,     title: "Forrest Gump",                       year: 1994 },
+  { tmdb_id: 27205,  title: "Inception",                          year: 2010 },
+  { tmdb_id: 313369, title: "La La Land",                         year: 2016 },
+  { tmdb_id: 419430, title: "Get Out",                            year: 2017 },
+  { tmdb_id: 76341,  title: "Mad Max: Fury Road",                 year: 2015 },
+  { tmdb_id: 152601, title: "Her",                                year: 2013 },
+  { tmdb_id: 274,    title: "The Silence of the Lambs",           year: 1991 },
+  { tmdb_id: 129,    title: "Spirited Away",                      year: 2001 },
+  { tmdb_id: 424,    title: "Schindler's List",                   year: 1993 },
+  { tmdb_id: 769,    title: "GoodFellas",                         year: 1990 },
+  { tmdb_id: 603,    title: "The Matrix",                         year: 1999 },
+  { tmdb_id: 348,    title: "Alien",                              year: 1979 },
+  { tmdb_id: 38,     title: "Eternal Sunshine of the Spotless Mind", year: 2004 },
+  { tmdb_id: 244786, title: "Whiplash",                           year: 2014 },
+  { tmdb_id: 535544, title: "Roma",                               year: 2018 },
+  { tmdb_id: 545611, title: "Everything Everywhere All at Once",  year: 2022 },
+  { tmdb_id: 1018,   title: "Mulholland Drive",                   year: 2001 },
+  { tmdb_id: 24428,  title: "The Avengers",                       year: 2012 },
+];
