@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Tell Next.js not to bundle better-sqlite3 — it must run as a native module
+  serverExternalPackages: ["better-sqlite3"],
   images: {
     remotePatterns: [
       {
@@ -10,9 +12,6 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  // Turbopack (default in Next.js 16) handles native modules differently
-  turbopack: {},
-  // Keep webpack config for non-Turbopack builds
   webpack: (config, { isServer }) => {
     if (isServer) {
       config.externals = [...(config.externals || []), "better-sqlite3"];
