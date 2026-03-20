@@ -231,7 +231,8 @@ async function importFilmsToDb(
           upsertMovie(movieData);
           upsertRating({ tmdb_id: movieData.tmdb_id, letterboxd_title: film.name, rating: film.rating, watched_date: null });
           result.imported++;
-        } catch {
+        } catch (err) {
+          console.error(`[import] failed "${film.name}":`, err);
           result.failed.push(film.name);
         }
       })
