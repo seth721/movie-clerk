@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { upsertMovie, upsertRating } from "@/lib/db";
 import { searchMovie } from "@/lib/tmdb";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 interface CsvRow {
   name: string;
@@ -117,7 +117,8 @@ export async function POST(req: NextRequest) {
               rewatch: row.rewatch,
             });
             imported++;
-          } catch {
+          } catch (err) {
+            console.error(`[letterboxd-import] failed "${row.name}":`, err);
             errors++;
           }
         })
@@ -126,7 +127,7 @@ export async function POST(req: NextRequest) {
       send({ type: "progress", done: Math.min(i + BATCH, toImport.length), total: toImport.length });
 
       if (i + BATCH < toImport.length) {
-        await new Promise((r) => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 100));
       }
     }
 
