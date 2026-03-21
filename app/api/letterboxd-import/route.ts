@@ -66,6 +66,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Could not read file content." }, { status: 400 });
   }
 
+  // Diagnostic: test one TMDB search before processing
+  try {
+    const testResult = await searchMovie("The Godfather", 1972);
+    console.log("[letterboxd-import] TMDB test search result:", testResult ? `found: ${testResult.title}` : "null");
+  } catch (err) {
+    console.error("[letterboxd-import] TMDB test search FAILED:", err);
+  }
+  console.log("[letterboxd-import] TMDB key present:", !!process.env.TMDB_API_KEY, "length:", process.env.TMDB_API_KEY?.length);
+
   const rows = parseCsv(text);
   if (!rows.length) {
     return NextResponse.json({ error: "No rows found. Make sure you uploaded ratings.csv." }, { status: 400 });
