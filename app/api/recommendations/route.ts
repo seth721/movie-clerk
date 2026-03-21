@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     // 3. Fetch related movies for top seeds — all in parallel
     const watchedIds = getWatchedTmdbIds();
     const excludedIds = getFeedbackExclusions();
-    const seeds = [...ratings].sort((a, b) => b.rating - a.rating).slice(0, 15);
+    const seeds = [...ratings].sort((a, b) => b.rating - a.rating).slice(0, 10);
 
     const seedResults = await Promise.allSettled(
       seeds.map((seed) =>
@@ -134,7 +134,7 @@ export async function POST(req: Request) {
 
     // 6. Claude ranks the top candidates (use taste DNA if available for richer context)
     const tasteDna = getTasteDna();
-    const claudeRecs = await getRankedRecommendations(scoredCandidates, profile, 20, tasteDna?.dna_text, mood ?? undefined);
+    const claudeRecs = await getRankedRecommendations(scoredCandidates, profile, 15, tasteDna?.dna_text, mood ?? undefined);
 
     // 7. Persist and return — filter to IDs we actually have in the movies table
     const validCandidateIds = new Set(allCandidates.map((c) => c.tmdb_id));

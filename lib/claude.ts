@@ -60,7 +60,7 @@ export async function getRankedRecommendations(
 
   // Format candidates as a numbered list for Claude
   const candidateList = candidates
-    .slice(0, 60) // limit context size
+    .slice(0, 40) // limit context size
     .map(
       (c, i) =>
         `${i + 1}. [ID:${c.tmdb_id}] ${c.title}${c.year ? ` (${c.year})` : ""}
@@ -128,7 +128,7 @@ Respond with this exact JSON structure:
 
   const response = await getClient().messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 6000,
+    max_tokens: 3500,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
   });
