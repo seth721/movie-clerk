@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
               runtime: null,
               vote_average: match.vote_average ?? null,
               vote_count: null,
+              original_language: match.original_language ?? null,
             });
             upsertRating({
               tmdb_id: match.id,
