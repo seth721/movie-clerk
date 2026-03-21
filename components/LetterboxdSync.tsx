@@ -48,6 +48,7 @@ export default function LetterboxdSync({ onSynced }: { onSynced?: (added: number
   const [showImport, setShowImport] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ done: number; total: number } | null>(null);
   const [importResult, setImportResult] = useState<{ imported: number; skipped: number; errors: number } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -131,6 +132,7 @@ export default function LetterboxdSync({ onSynced }: { onSynced?: (added: number
     setImporting(true);
     setImportError(null);
     setImportResult(null);
+    setImportProgress(null);
 
     const reader = new FileReader();
     reader.onload = async (evt) => {
@@ -141,12 +143,33 @@ export default function LetterboxdSync({ onSynced }: { onSynced?: (added: number
           headers: { "Content-Type": "text/plain" },
           body: text,
         });
-        const data = await res.json();
-        if (data.error) {
-          setImportError(data.error);
-        } else {
-          setImportResult({ imported: data.imported, skipped: data.skipped, errors: data.errors });
-          if (onSynced && data.imported > 0) onSynced(data.imported);
+        if (!res.body) throw new Error("No response stream");
+
+        const streamReader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await streamReader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() ?? "";
+          for (const part of parts) {
+            const line = part.replace(/^data: /, "").trim();
+            if (!line) continue;
+            try {
+              const event = JSON.parse(line);
+              if (event.type === "progress") {
+                setImportProgress({ done: event.done, total: event.total });
+              } else if (event.type === "done") {
+                setImportResult({ imported: event.imported, skipped: event.skipped, errors: event.errors });
+                if (onSynced && event.imported > 0) onSynced(event.imported);
+              } else if (event.type === "error") {
+                setImportError(event.message);
+              }
+            } catch { /* skip malformed events */ }
+          }
         }
       } catch (err) {
         setImportError("Import failed: " + String(err));
@@ -347,7 +370,7 @@ export default function LetterboxdSync({ onSynced }: { onSynced?: (added: number
             )}
 
             {/* Upload button */}
-            <div className="flex items-center gap-3">
+            <div className="space-y-3">
               {!importing ? (
                 <label
                   className="text-xs px-3 py-1.5 rounded-lg font-medium"
@@ -368,14 +391,30 @@ export default function LetterboxdSync({ onSynced }: { onSynced?: (added: number
                   />
                 </label>
               ) : (
-                <div className="flex items-center gap-2">
-                  <span
-                    className="text-xs px-3 py-1.5 rounded-lg font-medium"
-                    style={{ background: "#0a1a0a", border: "1px solid #1a2a1a", color: "#2a4a2a" }}
-                  >
-                    Importing…
-                  </span>
-                  <p className="text-xs" style={{ color: "#444" }}>Matching films to TMDB…</p>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-medium" style={{ color: "#00e054" }}>
+                      {importProgress
+                        ? `Matching films… ${importProgress.done} / ${importProgress.total}`
+                        : "Reading file…"}
+                    </p>
+                    {importProgress && (
+                      <p className="text-xs" style={{ color: "#444" }}>
+                        {Math.round((importProgress.done / importProgress.total) * 100)}%
+                      </p>
+                    )}
+                  </div>
+                  <div className="rounded-full overflow-hidden" style={{ background: "#1a1a1a", height: 6 }}>
+                    <div
+                      className="h-full rounded-full transition-all duration-300"
+                      style={{
+                        background: "#00e054",
+                        width: importProgress
+                          ? `${(importProgress.done / importProgress.total) * 100}%`
+                          : "5%",
+                      }}
+                    />
+                  </div>
                 </div>
               )}
             </div>

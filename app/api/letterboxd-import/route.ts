@@ -71,61 +71,70 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No rows found. Make sure you uploaded ratings.csv." }, { status: 400 });
   }
 
-  // Only import rows that have a rating
   const toImport = rows.filter((r) => r.rating !== null && !isNaN(r.rating as number));
   if (!toImport.length) {
     return NextResponse.json({ error: "No rated films found in this file." }, { status: 400 });
   }
 
-  let imported = 0;
-  let skipped = 0;
-  let errors = 0;
+  const encoder = new TextEncoder();
+  const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
+  const writer = writable.getWriter();
+  const send = (e: object) => writer.write(encoder.encode(`data: ${JSON.stringify(e)}\n\n`));
 
-  // Process in small batches to avoid hammering TMDB
-  const BATCH = 5;
-  for (let i = 0; i < toImport.length; i += BATCH) {
-    const batch = toImport.slice(i, i + BATCH);
-    await Promise.allSettled(
-      batch.map(async (row) => {
-        try {
-          const match = await searchMovie(row.name, row.year ?? undefined);
-          if (!match) { skipped++; return; }
+  (async () => {
+    let imported = 0;
+    let skipped = 0;
+    let errors = 0;
+    const BATCH = 5;
 
-          upsertMovie({
-            tmdb_id: match.id,
-            title: match.title,
-            year: match.release_date ? parseInt(match.release_date.slice(0, 4), 10) : row.year,
-            poster_path: match.poster_path ?? null,
-            backdrop_path: null,
-            genres: [],
-            cast: [],
-            director: null,
-            keywords: [],
-            overview: match.overview ?? null,
-            runtime: null,
-            vote_average: match.vote_average ?? null,
-            vote_count: null,
-          });
+    for (let i = 0; i < toImport.length; i += BATCH) {
+      const batch = toImport.slice(i, i + BATCH);
+      await Promise.allSettled(
+        batch.map(async (row) => {
+          try {
+            const match = await searchMovie(row.name, row.year ?? undefined);
+            if (!match) { skipped++; return; }
+            upsertMovie({
+              tmdb_id: match.id,
+              title: match.title,
+              year: match.release_date ? parseInt(match.release_date.slice(0, 4), 10) : row.year,
+              poster_path: match.poster_path ?? null,
+              backdrop_path: null,
+              genres: [],
+              cast: [],
+              director: null,
+              keywords: [],
+              overview: match.overview ?? null,
+              runtime: null,
+              vote_average: match.vote_average ?? null,
+              vote_count: null,
+            });
+            upsertRating({
+              tmdb_id: match.id,
+              letterboxd_title: row.name,
+              rating: row.rating as number,
+              watched_date: row.date,
+              rewatch: row.rewatch,
+            });
+            imported++;
+          } catch {
+            errors++;
+          }
+        })
+      );
 
-          upsertRating({
-            tmdb_id: match.id,
-            letterboxd_title: row.name,
-            rating: row.rating as number,
-            watched_date: row.date,
-            rewatch: row.rewatch,
-          });
+      send({ type: "progress", done: Math.min(i + BATCH, toImport.length), total: toImport.length });
 
-          imported++;
-        } catch {
-          errors++;
-        }
-      })
-    );
-    // Small pause between batches to be polite to TMDB
-    if (i + BATCH < toImport.length) {
-      await new Promise((r) => setTimeout(r, 300));
+      if (i + BATCH < toImport.length) {
+        await new Promise((r) => setTimeout(r, 300));
+      }
     }
-  }
 
-  return NextResponse.json({ ok: true, imported, skipped, errors, total: toImport.length });
+    send({ type: "done", imported, skipped, errors, total: toImport.length });
+    writer.close();
+  })();
+
+  return new Response(readable, {
+    headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "X-Accel-Buffering": "no" },
+  });
 }

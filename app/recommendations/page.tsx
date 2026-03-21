@@ -27,12 +27,15 @@ interface RecRow {
 
 // How many cards to show at once before pulling from the queue
 const VISIBLE_COUNT = 10;
+const GEN_STEPS = ["Pulling your file", "Scouring the catalog", "Making the shortlist", "Writing your ticket"];
 
 export default function RecommendationsPage() {
   const [allRecs, setAllRecs] = useState<RecRow[]>([]);
   const [visibleIds, setVisibleIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [genProgress, setGenProgress] = useState(0);
+  const [genStepIdx, setGenStepIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [genTime, setGenTime] = useState<string | null>(null);
   const [mood, setMood] = useState("");
@@ -76,7 +79,21 @@ export default function RecommendationsPage() {
 
   const generate = useCallback(async () => {
     setGenerating(true);
+    setGenProgress(0);
+    setGenStepIdx(0);
     setError(null);
+
+    // Animate progress bar over ~45s (typical generation time)
+    const startTime = Date.now();
+    const totalMs = 45000;
+    const timer = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.min(92, (elapsed / totalMs) * 100);
+      setGenProgress(pct);
+      setGenStepIdx(Math.min(GEN_STEPS.length - 1, Math.floor((pct / 92) * GEN_STEPS.length)));
+    }, 300);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+
     try {
       const res = await fetch("/api/recommendations", {
         method: "POST",
@@ -86,12 +103,17 @@ export default function RecommendationsPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to generate");
       const list: RecRow[] = data.recommendations ?? [];
-      setAllRecs(list);
-      setVisibleIds(list.slice(0, VISIBLE_COUNT).map((r) => r.tmdb_id));
-      if (list.length > 0) setGenTime(list[0].generated_at);
+      clearInterval(timer);
+      setGenProgress(100);
+      setTimeout(() => {
+        setAllRecs(list);
+        setVisibleIds(list.slice(0, VISIBLE_COUNT).map((r) => r.tmdb_id));
+        if (list.length > 0) setGenTime(list[0].generated_at);
+        setGenerating(false);
+      }, 400);
     } catch (err) {
+      clearInterval(timer);
       setError(String(err));
-    } finally {
       setGenerating(false);
     }
   }, []);
@@ -202,30 +224,46 @@ export default function RecommendationsPage() {
       {/* Generating state */}
       {generating && (
         <div
-          className="mb-8 p-6 rounded-xl text-center"
+          className="mb-8 p-6 rounded-xl"
           style={{ background: "#1a1a1a", border: "1px solid #2a2a2a" }}
         >
-          <div
-            className="w-12 h-12 rounded-full border-4 mx-auto mb-4 animate-spin"
-            style={{ borderColor: "#333", borderTopColor: "#e50914" }}
-          />
-          <p className="font-semibold text-lg mb-2">The clerk is digging through the back catalog…</p>
-          <p style={{ color: "#666" }} className="text-sm">
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-semibold" style={{ color: "#e2e8f0" }}>
+              The clerk is digging through the back catalog…
+            </p>
+            <span className="text-sm font-mono" style={{ color: "#e50914" }}>
+              {Math.round(genProgress)}%
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="rounded-full overflow-hidden mb-4" style={{ background: "#2a2a2a", height: 8 }}>
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{ background: "#e50914", width: `${genProgress}%` }}
+            />
+          </div>
+
+          {/* Steps */}
+          <div className="flex gap-2 flex-wrap">
+            {GEN_STEPS.map((step, i) => (
+              <span
+                key={step}
+                className="text-xs px-3 py-1 rounded-full transition-all duration-300"
+                style={{
+                  background: i <= genStepIdx ? "#2a0a0a" : "#1a1a1a",
+                  color: i <= genStepIdx ? "#e50914" : "#444",
+                  border: `1px solid ${i <= genStepIdx ? "#e5091440" : "#2a2a2a"}`,
+                }}
+              >
+                {i < genStepIdx ? "✓ " : i === genStepIdx ? "→ " : ""}{step}
+              </span>
+            ))}
+          </div>
+
+          <p className="text-xs mt-3" style={{ color: "#444" }}>
             Pulling your file, scouring the stacks, making the shortlist. This takes a moment.
           </p>
-          <div className="mt-4 flex justify-center gap-2 flex-wrap">
-            {["Pulling your file", "Scouring the catalog", "Making the shortlist", "Writing your ticket"].map(
-              (step, i) => (
-                <span
-                  key={step}
-                  className="text-xs px-3 py-1 rounded-full"
-                  style={{ background: "#222", color: "#666", animationDelay: `${i * 0.5}s` }}
-                >
-                  {step}
-                </span>
-              )
-            )}
-          </div>
         </div>
       )}
 
