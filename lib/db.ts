@@ -145,6 +145,29 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (quest_id) REFERENCES film_quests(id)
     );
 
+    CREATE TABLE IF NOT EXISTS side_quests (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      quest_id    INTEGER NOT NULL,
+      type        TEXT NOT NULL,
+      title       TEXT NOT NULL,
+      hook        TEXT NOT NULL,
+      film_ids    TEXT NOT NULL DEFAULT '[]',
+      film_titles TEXT NOT NULL DEFAULT '[]',
+      status      TEXT NOT NULL DEFAULT 'available',
+      milestone   INTEGER NOT NULL,
+      FOREIGN KEY (quest_id) REFERENCES film_quests(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS side_quest_progress (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      side_quest_id   INTEGER NOT NULL,
+      tmdb_id         INTEGER NOT NULL,
+      chapter         TEXT NOT NULL,
+      completed_at    TEXT DEFAULT (datetime('now')),
+      UNIQUE(side_quest_id, tmdb_id),
+      FOREIGN KEY (side_quest_id) REFERENCES side_quests(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_user_ratings_tmdb ON user_ratings(tmdb_id);
     CREATE INDEX IF NOT EXISTS idx_recommendations_rank ON recommendations(rank);
     CREATE INDEX IF NOT EXISTS idx_watchlist_tmdb ON watchlist(tmdb_id);
@@ -535,4 +558,53 @@ export function completeQuest(questId: number) {
 
 export function abandonQuest(questId: number) {
   getDb().prepare(`UPDATE film_quests SET status = 'abandoned' WHERE id = ?`).run(questId);
+}
+
+// ── Side Quests ───────────────────────────────────────────────────────────────
+
+export interface SideQuest {
+  id: number;
+  quest_id: number;
+  type: string;
+  title: string;
+  hook: string;
+  film_ids: number[];
+  film_titles: string[];
+  status: "available" | "active" | "completed" | "skipped";
+  milestone: number;
+}
+
+export interface SideQuestProgress {
+  id: number;
+  side_quest_id: number;
+  tmdb_id: number;
+  chapter: string;
+  completed_at: string;
+}
+
+export function saveSideQuests(quests: Omit<SideQuest, "id">[]) {
+  const stmt = getDb().prepare(`
+    INSERT INTO side_quests (quest_id, type, title, hook, film_ids, film_titles, status, milestone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const q of quests) {
+    stmt.run(q.quest_id, q.type, q.title, q.hook, JSON.stringify(q.film_ids), JSON.stringify(q.film_titles), q.status, q.milestone);
+  }
+}
+
+export function getSideQuests(questId: number): SideQuest[] {
+  const rows = getDb().prepare(`SELECT * FROM side_quests WHERE quest_id = ? ORDER BY milestone ASC`).all(questId) as Record<string, unknown>[];
+  return rows.map((r) => ({ ...r, film_ids: JSON.parse(r.film_ids as string), film_titles: JSON.parse(r.film_titles as string) })) as SideQuest[];
+}
+
+export function updateSideQuestStatus(sideQuestId: number, status: SideQuest["status"]) {
+  getDb().prepare(`UPDATE side_quests SET status = ? WHERE id = ?`).run(status, sideQuestId);
+}
+
+export function addSideQuestProgress(sideQuestId: number, tmdbId: number, chapter: string) {
+  getDb().prepare(`INSERT OR REPLACE INTO side_quest_progress (side_quest_id, tmdb_id, chapter) VALUES (?, ?, ?)`).run(sideQuestId, tmdbId, chapter);
+}
+
+export function getSideQuestProgress(sideQuestId: number): SideQuestProgress[] {
+  return getDb().prepare(`SELECT * FROM side_quest_progress WHERE side_quest_id = ? ORDER BY completed_at ASC`).all(sideQuestId) as SideQuestProgress[];
 }

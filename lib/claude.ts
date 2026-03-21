@@ -209,6 +209,66 @@ No quotes around the response.`;
   return text.text.trim();
 }
 
+// ── Side Quest Generation ─────────────────────────────────────────────────────
+
+export interface SideQuestSuggestion {
+  type: "influence" | "detour" | "endorsement" | "apprentice";
+  title: string;
+  hook: string;
+  films: { title: string; year: number }[];
+  milestone: number;
+}
+
+export async function generateSideQuests(
+  directorName: string,
+  mainFilmography: string[]
+): Promise<SideQuestSuggestion[]> {
+  const prompt = `You are the Movie Clerk — a wisecracking, film-obsessed clerk running a 16-bit video store RPG. A viewer is embarking on a quest through ${directorName}'s filmography.
+
+Generate 3 side quests that will appear as optional detours during their journey. Each side quest is a small chain of 1-3 films with a specific theme.
+
+The director's main filmography they'll be watching: ${mainFilmography.slice(0, 15).join(", ")}
+
+Side quest types to choose from:
+- "influence": Films that directly shaped ${directorName}'s work — the movies that made them
+- "detour": A sharp departure from their usual style (could be something they directed, produced, or an early obscure work)
+- "endorsement": Films ${directorName} has publicly called favorites, championed, or said changed their life
+- "apprentice": Work by filmmakers who trained under, assisted, or were directly mentored by ${directorName}
+
+Rules:
+- Each side quest has 1-3 films (vary the lengths — not all the same)
+- Films must be real, specific, and verifiable
+- Do NOT include films already in the main filmography
+- The hook is the clerk's tease — punchy, 1-2 sentences, 16-bit RPG energy, tells the player what they're getting into
+- milestone is when it unlocks: 2 = after 2nd main film, 4 = after 4th, 6 = after 6th
+- Spread milestones across the journey
+
+Respond with valid JSON only:
+{
+  "side_quests": [
+    {
+      "type": "influence" | "detour" | "endorsement" | "apprentice",
+      "title": "short quest name (e.g. 'The Kubrick Files')",
+      "hook": "clerk's tease line",
+      "films": [{"title": "Film Title", "year": 1974}, ...],
+      "milestone": 2
+    }
+  ]
+}`;
+
+  const response = await getClient().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 800,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const text = response.content.find((b) => b.type === "text");
+  if (!text || text.type !== "text") return [];
+  const raw = text.text.trim().replace(/^```json\n?/, "").replace(/\n?```$/, "");
+  const parsed = JSON.parse(raw) as { side_quests: SideQuestSuggestion[] };
+  return parsed.side_quests ?? [];
+}
+
 // ── Taste DNA ─────────────────────────────────────────────────────────────────
 
 interface RatedFilmForDna {
