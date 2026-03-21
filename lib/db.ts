@@ -125,6 +125,26 @@ function initSchema(db: Database.Database) {
 
     -- Migrate: add persona_name if missing
     -- (SQLite doesn't support IF NOT EXISTS on ALTER, so we wrap in app code below)
+    CREATE TABLE IF NOT EXISTS film_quests (
+      id                INTEGER PRIMARY KEY AUTOINCREMENT,
+      director_tmdb_id  INTEGER NOT NULL,
+      director_name     TEXT NOT NULL,
+      quest_title       TEXT NOT NULL,
+      film_ids          TEXT NOT NULL DEFAULT '[]',
+      status            TEXT NOT NULL DEFAULT 'active',
+      created_at        TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS quest_progress (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      quest_id    INTEGER NOT NULL,
+      tmdb_id     INTEGER NOT NULL,
+      chapter     TEXT NOT NULL,
+      completed_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(quest_id, tmdb_id),
+      FOREIGN KEY (quest_id) REFERENCES film_quests(id)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_user_ratings_tmdb ON user_ratings(tmdb_id);
     CREATE INDEX IF NOT EXISTS idx_recommendations_rank ON recommendations(rank);
     CREATE INDEX IF NOT EXISTS idx_watchlist_tmdb ON watchlist(tmdb_id);
@@ -463,4 +483,56 @@ export function getSetting(key: string): string | null {
 export function setSetting(key: string, value: string) {
   getDb().exec(`CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`);
   getDb().prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(key, value);
+}
+
+// ── Film Quests ───────────────────────────────────────────────────────────────
+
+export interface FilmQuest {
+  id: number;
+  director_tmdb_id: number;
+  director_name: string;
+  quest_title: string;
+  film_ids: number[];
+  status: "active" | "completed";
+  created_at: string;
+}
+
+export interface QuestProgress {
+  id: number;
+  quest_id: number;
+  tmdb_id: number;
+  chapter: string;
+  completed_at: string;
+}
+
+export function createQuest(quest: Omit<FilmQuest, "id" | "created_at">): number {
+  const result = getDb().prepare(`
+    INSERT INTO film_quests (director_tmdb_id, director_name, quest_title, film_ids, status)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(quest.director_tmdb_id, quest.director_name, quest.quest_title, JSON.stringify(quest.film_ids), quest.status);
+  return result.lastInsertRowid as number;
+}
+
+export function getActiveQuest(): FilmQuest | null {
+  const row = getDb().prepare(`SELECT * FROM film_quests WHERE status = 'active' ORDER BY created_at DESC LIMIT 1`).get() as Record<string, unknown> | undefined;
+  if (!row) return null;
+  return { ...row, film_ids: JSON.parse(row.film_ids as string) } as FilmQuest;
+}
+
+export function getQuestProgress(questId: number): QuestProgress[] {
+  return getDb().prepare(`SELECT * FROM quest_progress WHERE quest_id = ? ORDER BY completed_at ASC`).all(questId) as QuestProgress[];
+}
+
+export function addQuestProgress(questId: number, tmdbId: number, chapter: string) {
+  getDb().prepare(`
+    INSERT OR REPLACE INTO quest_progress (quest_id, tmdb_id, chapter) VALUES (?, ?, ?)
+  `).run(questId, tmdbId, chapter);
+}
+
+export function completeQuest(questId: number) {
+  getDb().prepare(`UPDATE film_quests SET status = 'completed' WHERE id = ?`).run(questId);
+}
+
+export function abandonQuest(questId: number) {
+  getDb().prepare(`UPDATE film_quests SET status = 'abandoned' WHERE id = ?`).run(questId);
 }

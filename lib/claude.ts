@@ -150,6 +150,65 @@ Respond with this exact JSON structure:
     .sort((a, b) => a.rank - b.rank);
 }
 
+// ── Film Quest Narrative ──────────────────────────────────────────────────────
+
+type QuestNarrativeInput =
+  | { type: "opening"; directorName: string; questTitle: string; totalFilms: number; nextFilm: string }
+  | { type: "chapter"; directorName: string; filmTitle: string; filmYear?: number | null; rating: number; filmsRemaining: number; nextFilm: string | null }
+  | { type: "finale"; directorName: string; questTitle: string };
+
+export async function generateQuestNarrative(input: QuestNarrativeInput): Promise<string> {
+  let prompt = "";
+
+  if (input.type === "opening") {
+    prompt = `You are the Movie Clerk — a wisecracking, film-obsessed clerk in a 16-bit video store RPG. Write the opening narration for a film quest.
+
+Quest: "${input.questTitle}"
+Director: ${input.directorName}
+Films to watch: ${input.totalFilms}
+First film: ${input.nextFilm}
+
+Write 2-3 sentences of text adventure narration in second person. Lean into the 16-bit RPG aesthetic — like a quest being issued. Reference the director's style or reputation. End by sending the player toward the first film.
+
+Keep it punchy, playful, in character. No quotes around the response.`;
+  }
+
+  if (input.type === "chapter") {
+    const stars = "★".repeat(Math.floor(input.rating)) + (input.rating % 1 >= 0.5 ? "½" : "");
+    prompt = `You are the Movie Clerk — a wisecracking, film-obsessed clerk in a 16-bit video store RPG. Write a chapter beat for a film quest.
+
+Film just watched: ${input.filmTitle}${input.filmYear ? ` (${input.filmYear})` : ""}
+Rating given: ${stars} (${input.rating}/5)
+Films remaining: ${input.filmsRemaining}
+${input.nextFilm ? `Next film: ${input.nextFilm}` : "This was the last film."}
+
+Write 2-3 sentences of text adventure narration in second person. Acknowledge the film they just watched in a way that reflects their rating (high rating = impressed clerk, low rating = the clerk shrugs). If there's a next film, hint at what awaits.
+
+Keep it punchy, in 16-bit RPG voice. No quotes around the response.`;
+  }
+
+  if (input.type === "finale") {
+    prompt = `You are the Movie Clerk — a wisecracking, film-obsessed clerk in a 16-bit video store RPG. Write the finale narration for a completed film quest.
+
+Quest completed: "${input.questTitle}"
+Director: ${input.directorName}
+
+Write 2-3 sentences celebrating the completed quest. RPG victory screen energy. The clerk is impressed. Make it feel earned.
+
+No quotes around the response.`;
+  }
+
+  const response = await getClient().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 200,
+    messages: [{ role: "user", content: prompt }],
+  });
+
+  const text = response.content.find((b) => b.type === "text");
+  if (!text || text.type !== "text") return "";
+  return text.text.trim();
+}
+
 // ── Taste DNA ─────────────────────────────────────────────────────────────────
 
 interface RatedFilmForDna {
