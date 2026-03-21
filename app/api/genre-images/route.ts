@@ -3,7 +3,7 @@ import { discoverMovies } from "@/lib/tmdb";
 
 const GENRE_IDS = [28, 12, 16, 35, 80, 99, 18, 10751, 14, 36, 27, 10402, 9648, 10749, 878, 53, 10752, 37];
 
-export const revalidate = 3600; // cache for 1 hour
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const results = await Promise.allSettled(

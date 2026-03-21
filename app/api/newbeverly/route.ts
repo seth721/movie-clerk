@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getNewBevFilms } from "@/lib/newbeverly";
 import { getCached, setCached } from "@/lib/memcache";
 
-export const revalidate = 3600;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const cached = getCached<object>("newbeverly");

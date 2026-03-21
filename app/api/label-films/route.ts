@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { CRITERION, KINO_LORBER } from "@/lib/labels";
 import { searchMovie } from "@/lib/tmdb";
 
-export const revalidate = 86400; // cache 24 hours
+export const dynamic = "force-dynamic";
 
 async function resolveLabel(films: { title: string; year: number }[]) {
   const results = await Promise.all(
