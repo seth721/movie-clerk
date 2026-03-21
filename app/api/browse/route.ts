@@ -14,6 +14,11 @@ export async function GET() {
     getNewOnPhysical(),
   ]);
 
+  if (theaters.status === "rejected") console.error("[browse] theaters failed:", theaters.reason);
+  if (digital.status === "rejected") console.error("[browse] digital failed:", digital.reason);
+  if (physical.status === "rejected") console.error("[browse] physical failed:", physical.reason);
+  console.log("[browse] TMDB key present:", !!process.env.TMDB_API_KEY, "length:", process.env.TMDB_API_KEY?.length);
+
   const data = {
     theaters: theaters.status === "fulfilled" ? theaters.value.results : [],
     digital: digital.status === "fulfilled" ? digital.value.results : [],
