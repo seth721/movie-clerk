@@ -1,78 +1,65 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { MONTHLY_THEMES, DIRECTOR_SPOTLIGHTS, GRINDHOUSE, SectionFilm } from "@/lib/monthly-sections";
+import {
+  MONTHLY_THEMES,
+  DIRECTOR_SPOTLIGHTS,
+  getGrindhouseSet,
+  FilmRef,
+  SectionFilm,
+} from "@/lib/monthly-sections";
+import { searchMovie } from "@/lib/tmdb";
 
 export const dynamic = "force-dynamic";
 
-const TMDB_BASE = "https://api.themoviedb.org/3";
-
-async function tmdbDiscover(params: Record<string, string>): Promise<SectionFilm[]> {
-  const url = new URL(`${TMDB_BASE}/discover/movie`);
-  url.searchParams.set("api_key", process.env.TMDB_API_KEY!);
-  url.searchParams.set("include_adult", "false");
-  for (const [k, v] of Object.entries(params)) {
-    url.searchParams.set(k, v);
-  }
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`TMDB discover failed: ${res.status}`);
-  const data = await res.json();
-  return ((data.results ?? []) as Record<string, unknown>[]).slice(0, 10).map((m) => ({
-    id: m.id as number,
-    title: m.title as string,
-    year: m.release_date ? parseInt((m.release_date as string).slice(0, 4)) : null,
-    poster_path: (m.poster_path as string | null) ?? null,
-    overview: (m.overview as string | null) ?? null,
-    vote_average: (m.vote_average as number | null) ?? null,
-  }));
+async function resolveFilms(films: FilmRef[]): Promise<SectionFilm[]> {
+  const results = await Promise.allSettled(
+    films.map(async ({ title, year }) => {
+      const hit = await searchMovie(title, year);
+      if (!hit) return null;
+      return {
+        id: hit.id,
+        title: hit.title,
+        year,
+        poster_path: hit.poster_path ?? null,
+        overview: hit.overview ?? null,
+        vote_average: hit.vote_average ?? null,
+      } as SectionFilm;
+    })
+  );
+  return results
+    .filter(
+      (r): r is PromiseFulfilledResult<SectionFilm> =>
+        r.status === "fulfilled" && r.value !== null
+    )
+    .map((r) => r.value);
 }
 
-async function tmdbDirectorFilms(personId: number): Promise<SectionFilm[]> {
-  const url = new URL(`${TMDB_BASE}/person/${personId}/movie_credits`);
-  url.searchParams.set("api_key", process.env.TMDB_API_KEY!);
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) throw new Error(`TMDB person ${personId} failed: ${res.status}`);
-  const data = await res.json();
-  const crew = (data.crew ?? []) as Record<string, unknown>[];
-  return crew
-    .filter((c) => c.job === "Director" && (c.vote_count as number) >= 500 && c.release_date)
-    .sort((a, b) => (b.vote_count as number) - (a.vote_count as number))
-    .slice(0, 10)
-    .map((m) => ({
-      id: m.id as number,
-      title: m.title as string,
-      year: m.release_date ? parseInt((m.release_date as string).slice(0, 4)) : null,
-      poster_path: (m.poster_path as string | null) ?? null,
-      overview: (m.overview as string | null) ?? null,
-      vote_average: (m.vote_average as number | null) ?? null,
-    }));
-}
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   const now = new Date();
-  const month = now.getMonth() + 1; // 1–12
-  const monthKey = `${now.getFullYear()}-${String(month).padStart(2, "0")}`;
+  const month = now.getMonth() + 1;
+  const forceRefresh = req.nextUrl.searchParams.get("refresh") === "1";
+  // v2 suffix so old cached Discover-based results are ignored
+  const monthKey = `${now.getFullYear()}-${String(month).padStart(2, "0")}-v2`;
 
-  // ── Check cache ──────────────────────────────────────────────────────────────
   const db = getDb();
-  const cached = db
-    .prepare("SELECT data FROM monthly_sections_cache WHERE month_key = ?")
-    .get(monthKey) as { data: string } | undefined;
 
-  if (cached) {
-    return NextResponse.json(JSON.parse(cached.data));
+  if (!forceRefresh) {
+    const cached = db
+      .prepare("SELECT data FROM monthly_sections_cache WHERE month_key = ?")
+      .get(monthKey) as { data: string } | undefined;
+    if (cached) {
+      return NextResponse.json(JSON.parse(cached.data));
+    }
   }
 
-  // ── Fetch fresh data ─────────────────────────────────────────────────────────
   const theme = MONTHLY_THEMES[month];
   const director = DIRECTOR_SPOTLIGHTS[month];
+  const grindhouse = getGrindhouseSet(month);
 
-  // Grindhouse: rotate through pages 1–3 by month for variety
-  const grindPage = String((month % 3) + 1);
-
-  const [themeResult, grindhouseResult, directorResult] = await Promise.allSettled([
-    tmdbDiscover({ ...theme.discover, page: "1" }),
-    tmdbDiscover({ ...GRINDHOUSE.discover, page: grindPage }),
-    tmdbDirectorFilms(director.tmdbPersonId),
+  const [themeFilms, grindhouseFilms, directorFilms] = await Promise.all([
+    resolveFilms(theme.films),
+    resolveFilms(grindhouse.films),
+    resolveFilms(director.films),
   ]);
 
   const payload = {
@@ -84,23 +71,22 @@ export async function GET() {
       title: theme.title,
       emoji: theme.emoji,
       description: theme.description,
-      films: themeResult.status === "fulfilled" ? themeResult.value : [],
+      films: themeFilms,
     },
     grindhouse: {
-      title: GRINDHOUSE.title,
-      emoji: GRINDHOUSE.emoji,
-      description: GRINDHOUSE.description,
-      films: grindhouseResult.status === "fulfilled" ? grindhouseResult.value : [],
+      title: grindhouse.title,
+      emoji: grindhouse.emoji,
+      description: grindhouse.description,
+      films: grindhouseFilms,
     },
     director: {
       name: director.name,
       years: director.years,
       description: director.description,
-      films: directorResult.status === "fulfilled" ? directorResult.value : [],
+      films: directorFilms,
     },
   };
 
-  // ── Cache for the month ──────────────────────────────────────────────────────
   db.prepare(
     "INSERT OR REPLACE INTO monthly_sections_cache (month_key, data) VALUES (?, ?)"
   ).run(monthKey, JSON.stringify(payload));
