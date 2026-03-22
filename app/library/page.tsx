@@ -75,6 +75,27 @@ export default function LibraryPage() {
       }
     });
 
+  const exportCsv = () => {
+    const header = ["Title", "Year", "Director", "Genres", "Rating", "Watched Date", "TMDB ID"];
+    const rows = movies.map((m) => [
+      `"${m.title.replace(/"/g, '""')}"`,
+      m.year ?? "",
+      `"${(m.director ?? "").replace(/"/g, '""')}"`,
+      `"${(m.genres ?? []).join(", ")}"`,
+      m.rating,
+      m.watched_date ?? "",
+      m.tmdb_id,
+    ]);
+    const csv = [header, ...rows].map((r) => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `movie-clerk-library-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   // Rating distribution
   const dist = [5, 4.5, 4, 3.5, 3, 2.5, 2, 1.5, 1, 0.5].map((r) => ({
     rating: r,
@@ -121,13 +142,22 @@ export default function LibraryPage() {
             {movies.length} films rated
           </p>
         </div>
-        <Link
-          href="/recommendations"
-          className="px-5 py-2.5 rounded-lg font-semibold text-sm"
-          style={{ background: "#e50914", color: "#fff" }}
-        >
-          Get Recommendations →
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCsv}
+            className="px-4 py-2.5 rounded-lg font-semibold text-sm"
+            style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#aaa" }}
+          >
+            ↓ Export CSV
+          </button>
+          <Link
+            href="/recommendations"
+            className="px-5 py-2.5 rounded-lg font-semibold text-sm"
+            style={{ background: "#e50914", color: "#fff" }}
+          >
+            Get Recommendations →
+          </Link>
+        </div>
       </div>
 
       {/* Rating distribution */}
