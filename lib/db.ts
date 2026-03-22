@@ -168,6 +168,19 @@ function initSchema(db: Database.Database) {
       FOREIGN KEY (side_quest_id) REFERENCES side_quests(id)
     );
 
+    CREATE TABLE IF NOT EXISTS monthly_sections_cache (
+      month_key  TEXT PRIMARY KEY,
+      data       TEXT NOT NULL,
+      cached_at  TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS email_subscribers (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      email         TEXT UNIQUE NOT NULL,
+      subscribed_at TEXT DEFAULT (datetime('now')),
+      active        INTEGER DEFAULT 1
+    );
+
     CREATE INDEX IF NOT EXISTS idx_user_ratings_tmdb ON user_ratings(tmdb_id);
     CREATE INDEX IF NOT EXISTS idx_recommendations_rank ON recommendations(rank);
     CREATE INDEX IF NOT EXISTS idx_watchlist_tmdb ON watchlist(tmdb_id);

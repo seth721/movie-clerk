@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { href: "/", label: "Discover" },
   { href: "/library", label: "My Library" },
   { href: "/recommendations", label: "Movie Clerk Recommends" },
+  { href: "/monthly", label: "📼 The Stacks" },
   { href: "/stats", label: "My Stats" },
   { href: "/film-quest", label: "⚔ Film Quest" },
 ];
