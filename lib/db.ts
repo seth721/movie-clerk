@@ -573,6 +573,49 @@ export function abandonQuest(questId: number) {
   getDb().prepare(`UPDATE film_quests SET status = 'abandoned' WHERE id = ?`).run(questId);
 }
 
+export function getCompletedQuests(): FilmQuest[] {
+  const rows = getDb()
+    .prepare(`SELECT * FROM film_quests WHERE status IN ('completed','abandoned') ORDER BY created_at DESC`)
+    .all() as Record<string, unknown>[];
+  return rows.map((r) => ({ ...r, film_ids: JSON.parse(r.film_ids as string) })) as FilmQuest[];
+}
+
+export function getQuestProgressWithFilms(questId: number) {
+  return getDb()
+    .prepare(`
+      SELECT qp.tmdb_id, qp.chapter, qp.completed_at,
+             m.title, m.year, m.poster_path,
+             r.rating
+      FROM quest_progress qp
+      LEFT JOIN movies m ON m.tmdb_id = qp.tmdb_id
+      LEFT JOIN user_ratings r ON r.tmdb_id = qp.tmdb_id
+      WHERE qp.quest_id = ?
+      ORDER BY qp.completed_at ASC
+    `)
+    .all(questId) as {
+      tmdb_id: number; chapter: string; completed_at: string;
+      title: string | null; year: number | null; poster_path: string | null; rating: number | null;
+    }[];
+}
+
+export function getSideQuestProgressWithFilms(sideQuestId: number) {
+  return getDb()
+    .prepare(`
+      SELECT sqp.tmdb_id, sqp.chapter, sqp.completed_at,
+             m.title, m.year, m.poster_path,
+             r.rating
+      FROM side_quest_progress sqp
+      LEFT JOIN movies m ON m.tmdb_id = sqp.tmdb_id
+      LEFT JOIN user_ratings r ON r.tmdb_id = sqp.tmdb_id
+      WHERE sqp.side_quest_id = ?
+      ORDER BY sqp.completed_at ASC
+    `)
+    .all(sideQuestId) as {
+      tmdb_id: number; chapter: string; completed_at: string;
+      title: string | null; year: number | null; poster_path: string | null; rating: number | null;
+    }[];
+}
+
 // ── Side Quests ───────────────────────────────────────────────────────────────
 
 export interface SideQuest {

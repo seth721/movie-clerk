@@ -458,7 +458,10 @@ export default function FilmQuestPage() {
     return (
       <div className="max-w-2xl mx-auto">
         <div className="mb-8">
-          <p className="text-xs font-bold mb-2" style={{ color: PIXEL_GREEN, fontFamily: "monospace", letterSpacing: 3 }}>▓▒░ FILM QUEST ░▒▓</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold mb-2" style={{ color: PIXEL_GREEN, fontFamily: "monospace", letterSpacing: 3 }}>▓▒░ FILM QUEST ░▒▓</p>
+            <a href="/film-quest/history" className="text-xs px-3 py-1 rounded" style={{ background: "#1a1a1a", color: "#666", border: "1px solid #2a2a2a", fontFamily: "monospace" }}>📜 Quest Log</a>
+          </div>
           <h1 className="text-3xl font-bold mb-2">Select Your Quest</h1>
           <p className="text-sm" style={{ color: "#555" }}>Choose a director. Work through their filmography. Earn your stripes.</p>
         </div>
