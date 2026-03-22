@@ -10,6 +10,7 @@ interface Stats {
   watchlist: number;
   ratingDist: Record<string, number>;
   decades: { decade: number; avg: number; count: number }[];
+  sweetSpotDecade: { decade: number; avg: number; count: number } | null;
   topGenres: { genre: string; avg: number; count: number }[];
   topDirectors: { name: string; avg: number; count: number }[];
   topActors: { name: string; avg: number; count: number }[];
@@ -17,6 +18,11 @@ interface Stats {
   avgRuntimeLoved: number | null;
   generosityDelta: number | null;
   topYear: number | null;
+  contrarian: { title: string; year: number | null; userRating: number; tmdbRating: number; delta: number }[];
+  hiddenGems: { title: string; year: number | null; userRating: number; voteCount: number }[];
+  yearActivity: { year: number; count: number }[];
+  firstWatch: { title: string; year: number | null; watchedDate: string | null } | null;
+  latestWatch: { title: string; year: number | null; watchedDate: string | null } | null;
 }
 
 const STAR_STEPS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5];
@@ -90,6 +96,16 @@ function BarRow({
   );
 }
 
+function Stars({ rating }: { rating: number }) {
+  const full = Math.floor(rating);
+  const half = rating % 1 >= 0.5;
+  return (
+    <span style={{ color: "#e50914", letterSpacing: 1 }}>
+      {"★".repeat(full)}{half ? "½" : ""}
+    </span>
+  );
+}
+
 export default function StatsPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,6 +148,7 @@ export default function StatsPage() {
   const maxGenre = Math.max(...stats.topGenres.map((g) => g.count), 1);
   const maxDecade = Math.max(...stats.decades.map((d) => d.count), 1);
   const maxDirector = Math.max(...stats.topDirectors.map((d) => d.count), 1);
+  const maxYearActivity = Math.max(...(stats.yearActivity?.map((y) => y.count) ?? []), 1);
 
   const generosityLabel = stats.generosityDelta != null
     ? stats.generosityDelta > 0.3
@@ -251,6 +268,47 @@ export default function StatsPage() {
         </div>
       </div>
 
+      {/* Yearly watch activity */}
+      {stats.yearActivity && stats.yearActivity.length > 1 && (
+        <div className="rounded-2xl p-6 mb-6" style={{ background: "#111", border: "1px solid #1e1e1e" }}>
+          <h2 className="font-bold mb-5" style={{ color: "#e2e8f0" }}>Watches by Year</h2>
+          <div className="flex items-end gap-2" style={{ height: 80 }}>
+            {stats.yearActivity.map(({ year, count }) => (
+              <div key={year} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className="w-full rounded-sm transition-all duration-700"
+                  style={{
+                    height: `${Math.max(4, (count / maxYearActivity) * 64)}px`,
+                    background: "linear-gradient(180deg, #e50914, #7a0009)",
+                  }}
+                  title={`${year}: ${count} films`}
+                />
+                <span style={{ color: "#444", fontSize: 10 }}>{year}</span>
+                <span style={{ color: "#666", fontSize: 10 }}>{count}</span>
+              </div>
+            ))}
+          </div>
+          {stats.firstWatch && stats.latestWatch && (
+            <div className="flex justify-between mt-4 pt-4" style={{ borderTop: "1px solid #1a1a1a" }}>
+              <div>
+                <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "#444" }}>First logged</p>
+                <p className="text-sm font-medium" style={{ color: "#e2e8f0" }}>{stats.firstWatch.title}</p>
+                <p className="text-xs" style={{ color: "#555" }}>
+                  {stats.firstWatch.year} · {stats.firstWatch.watchedDate?.slice(0, 10)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "#444" }}>Most recent</p>
+                <p className="text-sm font-medium" style={{ color: "#e2e8f0" }}>{stats.latestWatch.title}</p>
+                <p className="text-xs" style={{ color: "#555" }}>
+                  {stats.latestWatch.year} · {stats.latestWatch.watchedDate?.slice(0, 10)}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Top directors */}
       {stats.topDirectors.length > 0 && (
         <div className="rounded-2xl p-6 mb-6" style={{ background: "#111", border: "1px solid #1e1e1e" }}>
@@ -266,6 +324,69 @@ export default function StatsPage() {
               />
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Contrarian picks + Hidden gems — two columns */}
+      {(stats.contrarian?.length > 0 || stats.hiddenGems?.length > 0) && (
+        <div className="grid gap-6 mb-6" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          {/* Contrarian picks */}
+          {stats.contrarian?.length > 0 && (
+            <div className="rounded-2xl p-6" style={{ background: "#111", border: "1px solid #1e1e1e" }}>
+              <h2 className="font-bold mb-1" style={{ color: "#e2e8f0" }}>You vs. The Crowd</h2>
+              <p className="text-xs mb-5" style={{ color: "#4a5568" }}>Where your taste diverges most from consensus</p>
+              <div className="space-y-4">
+                {stats.contrarian.map((c) => (
+                  <div key={c.title} className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: "#e2e8f0" }}>{c.title}</p>
+                      <p className="text-xs" style={{ color: "#555" }}>{c.year}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span className="text-xs" style={{ color: "#555" }}>You</span>
+                        <Stars rating={c.userRating} />
+                      </div>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <span className="text-xs" style={{ color: "#555" }}>TMDB</span>
+                        <span className="text-xs" style={{ color: "#4a5568" }}>★ {c.tmdbRating.toFixed(1)}</span>
+                      </div>
+                      <p
+                        className="text-xs font-bold mt-0.5"
+                        style={{ color: c.delta > 0 ? "#22c55e" : "#e53e3e" }}
+                      >
+                        {c.delta > 0 ? `+${c.delta}` : c.delta}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Hidden gems */}
+          {stats.hiddenGems?.length > 0 && (
+            <div className="rounded-2xl p-6" style={{ background: "#111", border: "1px solid #1e1e1e" }}>
+              <h2 className="font-bold mb-1" style={{ color: "#e2e8f0" }}>Hidden Gems</h2>
+              <p className="text-xs mb-5" style={{ color: "#4a5568" }}>Films you loved that few others have seen</p>
+              <div className="space-y-4">
+                {stats.hiddenGems.map((g) => (
+                  <div key={g.title} className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate" style={{ color: "#e2e8f0" }}>{g.title}</p>
+                      <p className="text-xs" style={{ color: "#555" }}>{g.year}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <Stars rating={g.userRating} />
+                      <p className="text-xs mt-0.5" style={{ color: "#4a5568" }}>
+                        {g.voteCount.toLocaleString()} votes
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -290,6 +411,15 @@ export default function StatsPage() {
 
       {/* Fun facts row */}
       <div className="grid gap-4 mb-10" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))" }}>
+        {stats.sweetSpotDecade && (
+          <div className="rounded-xl p-5" style={{ background: "#111", border: "1px solid #1e1e1e" }}>
+            <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "#555" }}>Sweet spot</p>
+            <p className="text-3xl font-black mb-1" style={{ color: "#f1f5f9" }}>{stats.sweetSpotDecade.decade}s</p>
+            <p className="text-xs" style={{ color: "#4a5568" }}>
+              ★ {stats.sweetSpotDecade.avg.toFixed(2)} avg · {stats.sweetSpotDecade.count} films
+            </p>
+          </div>
+        )}
         {stats.foreignPct != null && (
           <div className="rounded-xl p-5" style={{ background: "#111", border: "1px solid #1e1e1e" }}>
             <p className="text-xs uppercase tracking-widest mb-1" style={{ color: "#555" }}>Foreign films</p>

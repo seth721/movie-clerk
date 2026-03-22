@@ -31,19 +31,22 @@ export async function GET() {
   // ── Pull all rated films for JS aggregation ──────────────────────────────────
   const rows = db
     .prepare(
-      `SELECT r.rating, m.year, m.genres, m.cast, m.director,
-              m.runtime, m.vote_average, m.original_language
+      `SELECT r.rating, r.watched_date, m.title, m.year, m.genres, m.cast, m.director,
+              m.runtime, m.vote_average, m.vote_count, m.original_language
        FROM user_ratings r
        JOIN movies m ON m.tmdb_id = r.tmdb_id`
     )
     .all() as {
       rating: number;
+      watched_date: string | null;
+      title: string;
       year: number | null;
       genres: string;
       cast: string;
       director: string | null;
       runtime: number | null;
       vote_average: number | null;
+      vote_count: number | null;
       original_language: string | null;
     }[];
 
@@ -65,6 +68,16 @@ export async function GET() {
     }))
     .sort((a, b) => b.count - a.count)
     .slice(0, 6);
+
+  // ── Sweet spot decade (highest avg, min 5 films) ─────────────────────────────
+  const sweetSpotDecade = Object.entries(decadeMap)
+    .filter(([, v]) => v.count >= 5)
+    .map(([d, v]) => ({
+      decade: Number(d),
+      avg: Math.round((v.total / v.count) * 100) / 100,
+      count: v.count,
+    }))
+    .sort((a, b) => b.avg - a.avg)[0] ?? null;
 
   // ── Genre breakdown ──────────────────────────────────────────────────────────
   const genreMap: Record<string, { total: number; count: number }> = {};
@@ -108,10 +121,10 @@ export async function GET() {
   // ── Top actors (appearing in highest-rated films) ────────────────────────────
   const actorMap: Record<string, { total: number; count: number }> = {};
   for (const r of rows) {
-    if (r.rating < 4) continue; // only loved films
+    if (r.rating < 4) continue;
     let cast: string[] = [];
     try { cast = JSON.parse(r.cast || "[]"); } catch { /* skip */ }
-    for (const actor of cast.slice(0, 5)) { // top-billed only
+    for (const actor of cast.slice(0, 5)) {
       if (!actorMap[actor]) actorMap[actor] = { total: 0, count: 0 };
       actorMap[actor].total += r.rating;
       actorMap[actor].count++;
@@ -165,6 +178,50 @@ export async function GET() {
       ? Number(Object.entries(yearMap).sort(([, a], [, b]) => b - a)[0][0])
       : null;
 
+  // ── Contrarian picks (biggest gap vs TMDB consensus) ────────────────────────
+  // vote_count >= 500 ensures there's a real consensus to compare against
+  const contrarian = rows
+    .filter((r) => r.vote_average != null && r.vote_count != null && r.vote_count >= 500)
+    .map((r) => {
+      const tmdbNorm = Math.round((r.vote_average! / 2) * 10) / 10; // /10 → /5
+      const delta = Math.round((r.rating - tmdbNorm) * 10) / 10;
+      return { title: r.title, year: r.year, userRating: r.rating, tmdbRating: tmdbNorm, delta };
+    })
+    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))
+    .slice(0, 5);
+
+  // ── Hidden gems (loved but few people have seen them) ────────────────────────
+  const hiddenGems = rows
+    .filter((r) => r.rating >= 4 && r.vote_count != null && r.vote_count < 8000 && r.vote_count > 50)
+    .map((r) => ({ title: r.title, year: r.year, userRating: r.rating, voteCount: r.vote_count! }))
+    .sort((a, b) => b.userRating - a.userRating || a.voteCount - b.voteCount)
+    .slice(0, 6);
+
+  // ── Yearly watch activity (by calendar year watched) ─────────────────────────
+  const watchYearMap: Record<number, number> = {};
+  for (const r of rows) {
+    if (!r.watched_date) continue;
+    const yr = parseInt(r.watched_date.slice(0, 4), 10);
+    if (!isNaN(yr) && yr >= 2000 && yr <= 2030) {
+      watchYearMap[yr] = (watchYearMap[yr] ?? 0) + 1;
+    }
+  }
+  const yearActivity = Object.entries(watchYearMap)
+    .map(([y, count]) => ({ year: Number(y), count }))
+    .sort((a, b) => a.year - b.year)
+    .slice(-8); // show last 8 years max
+
+  // ── First and most recent watch ───────────────────────────────────────────────
+  const withDates = rows
+    .filter((r) => r.watched_date)
+    .sort((a, b) => (a.watched_date ?? "").localeCompare(b.watched_date ?? ""));
+  const firstWatch = withDates.length > 0
+    ? { title: withDates[0].title, year: withDates[0].year, watchedDate: withDates[0].watched_date }
+    : null;
+  const latestWatch = withDates.length > 0
+    ? { title: withDates[withDates.length - 1].title, year: withDates[withDates.length - 1].year, watchedDate: withDates[withDates.length - 1].watched_date }
+    : null;
+
   return NextResponse.json({
     total,
     avgRating: avg,
@@ -172,6 +229,7 @@ export async function GET() {
     watchlist,
     ratingDist,
     decades,
+    sweetSpotDecade,
     topGenres,
     topDirectors,
     topActors,
@@ -179,5 +237,10 @@ export async function GET() {
     avgRuntimeLoved,
     generosityDelta,
     topYear,
+    contrarian,
+    hiddenGems,
+    yearActivity,
+    firstWatch,
+    latestWatch,
   });
 }
