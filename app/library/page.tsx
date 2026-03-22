@@ -10,11 +10,12 @@ interface RatingRow {
   year: number | null;
   poster_path: string | null;
   genres: string[];
+  director: string | null;
   rating: number;
   watched_date: string | null;
 }
 
-type SortKey = "rating_desc" | "rating_asc" | "date_desc" | "title_asc";
+type SortKey = "rating_desc" | "rating_asc" | "date_desc" | "title_asc" | "year_desc";
 
 export default function LibraryPage() {
   const [movies, setMovies] = useState<RatingRow[]>([]);
@@ -22,6 +23,8 @@ export default function LibraryPage() {
   const [sort, setSort] = useState<SortKey>("rating_desc");
   const [search, setSearch] = useState("");
   const [genreFilter, setGenreFilter] = useState("");
+  const [directorFilter, setDirectorFilter] = useState("");
+  const [decadeFilter, setDecadeFilter] = useState("");
 
   useEffect(() => {
     fetch("/api/library")
@@ -33,9 +36,21 @@ export default function LibraryPage() {
       .catch(() => setLoading(false));
   }, []);
 
-  // Derive genre list
+  // Derive filter options
   const allGenres = Array.from(
     new Set(movies.flatMap((m) => m.genres ?? []))
+  ).sort();
+
+  const allDirectors = Array.from(
+    new Set(movies.map((m) => m.director).filter(Boolean) as string[])
+  ).sort();
+
+  const allDecades = Array.from(
+    new Set(
+      movies
+        .filter((m) => m.year != null)
+        .map((m) => `${Math.floor(m.year! / 10) * 10}s`)
+    )
   ).sort();
 
   // Filter + sort
@@ -43,7 +58,11 @@ export default function LibraryPage() {
     .filter((m) => {
       const matchSearch = !search || m.title.toLowerCase().includes(search.toLowerCase());
       const matchGenre = !genreFilter || (m.genres ?? []).includes(genreFilter);
-      return matchSearch && matchGenre;
+      const matchDirector = !directorFilter || m.director === directorFilter;
+      const matchDecade = !decadeFilter || (
+        m.year != null && `${Math.floor(m.year / 10) * 10}s` === decadeFilter
+      );
+      return matchSearch && matchGenre && matchDirector && matchDecade;
     })
     .sort((a, b) => {
       switch (sort) {
@@ -52,6 +71,7 @@ export default function LibraryPage() {
         case "date_desc":
           return (b.watched_date ?? "").localeCompare(a.watched_date ?? "");
         case "title_asc":   return a.title.localeCompare(b.title);
+        case "year_desc":   return (b.year ?? 0) - (a.year ?? 0);
       }
     });
 
@@ -138,7 +158,7 @@ export default function LibraryPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-6 flex-wrap">
+      <div className="flex gap-3 mb-3 flex-wrap">
         <input
           type="text"
           placeholder="Search films…"
@@ -147,6 +167,20 @@ export default function LibraryPage() {
           className="flex-1 min-w-48 px-4 py-2 rounded-lg text-sm outline-none"
           style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#fff" }}
         />
+        <select
+          value={sort}
+          onChange={(e) => setSort(e.target.value as SortKey)}
+          className="px-4 py-2 rounded-lg text-sm outline-none"
+          style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#fff" }}
+        >
+          <option value="rating_desc">Rating ↓</option>
+          <option value="rating_asc">Rating ↑</option>
+          <option value="date_desc">Date watched ↓</option>
+          <option value="year_desc">Year ↓</option>
+          <option value="title_asc">Title A–Z</option>
+        </select>
+      </div>
+      <div className="flex gap-3 mb-6 flex-wrap">
         <select
           value={genreFilter}
           onChange={(e) => setGenreFilter(e.target.value)}
@@ -159,16 +193,36 @@ export default function LibraryPage() {
           ))}
         </select>
         <select
-          value={sort}
-          onChange={(e) => setSort(e.target.value as SortKey)}
+          value={directorFilter}
+          onChange={(e) => setDirectorFilter(e.target.value)}
           className="px-4 py-2 rounded-lg text-sm outline-none"
           style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#fff" }}
         >
-          <option value="rating_desc">Rating ↓</option>
-          <option value="rating_asc">Rating ↑</option>
-          <option value="date_desc">Date watched ↓</option>
-          <option value="title_asc">Title A–Z</option>
+          <option value="">All directors</option>
+          {allDirectors.map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
         </select>
+        <select
+          value={decadeFilter}
+          onChange={(e) => setDecadeFilter(e.target.value)}
+          className="px-4 py-2 rounded-lg text-sm outline-none"
+          style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#fff" }}
+        >
+          <option value="">All decades</option>
+          {allDecades.map((d) => (
+            <option key={d} value={d}>{d}</option>
+          ))}
+        </select>
+        {(search || genreFilter || directorFilter || decadeFilter) && (
+          <button
+            onClick={() => { setSearch(""); setGenreFilter(""); setDirectorFilter(""); setDecadeFilter(""); }}
+            className="px-3 py-2 rounded-lg text-sm"
+            style={{ background: "#1a1a1a", border: "1px solid #2a2a2a", color: "#666" }}
+          >
+            Clear filters ✕
+          </button>
+        )}
       </div>
 
       <p style={{ color: "#555" }} className="text-sm mb-4">

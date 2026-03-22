@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 interface SyncState {
   username: string | null;
@@ -58,6 +58,17 @@ export default function LetterboxdSync({ onSynced }: { onSynced?: (added: number
       .then(setState)
       .catch(() => {});
   }, []);
+
+  // Warn user not to navigate away during import
+  useEffect(() => {
+    if (!importing) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [importing]);
 
   const lookupPreview = async () => {
     if (!input.trim()) return;
@@ -366,6 +377,17 @@ export default function LetterboxdSync({ onSynced }: { onSynced?: (added: number
                 <p className="text-xs" style={{ color: "#444" }}>
                   The export can take a few minutes to arrive by email. Only <strong style={{ color: "#555" }}>ratings.csv</strong> is needed — not the full diary.
                 </p>
+              </div>
+            )}
+
+            {/* Stay-on-page warning */}
+            {importing && (
+              <div
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium"
+                style={{ background: "#1a1200", border: "1px solid #f5c51840", color: "#f5c518" }}
+              >
+                <span>⚠️</span>
+                <span>Import in progress — don&apos;t close this tab or navigate away</span>
               </div>
             )}
 
